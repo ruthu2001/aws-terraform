@@ -1,29 +1,26 @@
-
 pipeline {
     agent any
 
     options {
         timestamps()
         timeout(time: 20, unit: 'MINUTES')
-    }
-
-    parameters {
-        choice(
-            name: 'ACTION',
-            choices: ['plan', 'apply', 'destroy'],
-            description: 'Choose the Terraform operation'
-        )
+        disableConcurrentBuilds()
     }
 
     environment {
-        TF_IN_AUTOMATION = 'true'
+        AWS_REGION         = 'ap-south-1'
+        AWS_DEFAULT_REGION = 'ap-south-1'
+        TF_VAR_aws_region  = 'ap-south-1'
     }
 
     stages {
         stage('Check Tools') {
             steps {
-                sh 'terraform version'
-                sh 'aws --version'
+                sh '''
+                    terraform version
+                    aws --version
+                    aws sts get-caller-identity
+                '''
             }
         }
 
@@ -47,27 +44,27 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                sh 'terraform plan -input=false -out=tfplan'
+                sh '''
+                    terraform plan \
+                      -input=false \
+                      -var="aws_region=ap-south-1" \
+                      -out=tfplan
+                '''
             }
         }
 
         stage('Terraform Apply') {
-            when {
-                expression { params.ACTION == 'apply' }
-            }
             steps {
-                input message: 'Approve creating or updating AWS resources?'
-                sh 'terraform apply -input=false tfplan'
+                input message: 'Approve creation of the EC2 instance in ap-south-1?', 
+                      ok: 'Approve Apply'
+
+                sh 'terraform apply -input=false -auto-approve tfplan'
             }
         }
 
-        stage('Terraform Destroy') {
-            when {
-                expression { params.ACTION == 'destroy' }
-            }
+        stage('Terraform Output') {
             steps {
-                input message: 'Approve destroying Terraform-managed resources?'
-                sh 'terraform destroy -input=false -auto-approve'
+                sh 'terraform output'
             }
         }
     }
@@ -86,5 +83,4 @@ pipeline {
         }
     }
 }
-
 
